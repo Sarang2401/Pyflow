@@ -1,0 +1,113 @@
+{
+  "pipeline": {
+    "name": "NYC Taxi ETL Pipeline",
+    "version": "1.0.0",
+    "description": "Extract, transform, and load NYC taxi trip data"
+  },
+  "extraction": {
+    "source_file": "data/raw/yellow_tripdata_2024-01.parquet",
+    "file_type": "parquet",
+    "chunk_size": 50000,
+    "sample_size": 100000,
+    "columns": [
+      "VendorID",
+      "tpep_pickup_datetime",
+      "tpep_dropoff_datetime",
+      "passenger_count",
+      "trip_distance",
+      "PULocationID",
+      "DOLocationID",
+      "fare_amount",
+      "total_amount"
+    ]
+  },
+  "transformation": {
+    "missing_values": {
+      "strategy": "drop",
+      "columns": ["passenger_count", "fare_amount", "trip_distance"]
+    },
+    "outliers": {
+      "enabled": true,
+      "method": "iqr",
+      "threshold": 1.5,
+      "columns": ["fare_amount", "trip_distance", "total_amount"]
+    },
+    "duplicates": {
+      "enabled": true,
+      "keep": "first"
+    },
+    "datetime_columns": [
+      "tpep_pickup_datetime",
+      "tpep_dropoff_datetime"
+    ],
+    "filters": {
+      "fare_amount": {
+        ">=": 0,
+        "<=": 500
+      },
+      "trip_distance": {
+        ">=": 0,
+        "<=": 100
+      },
+      "passenger_count": {
+        ">=": 1,
+        "<=": 6
+      }
+    }
+  },
+  "aggregation": {
+    "hourly_stats": {
+      "group_by": "hour",
+      "metrics": {
+        "trip_distance": ["mean", "sum", "count"],
+        "fare_amount": ["mean", "sum", "min", "max"],
+        "total_amount": ["mean", "sum"]
+      }
+    },
+    "location_stats": {
+      "group_by": "PULocationID",
+      "metrics": {
+        "trip_distance": ["mean", "count"],
+        "fare_amount": ["mean", "sum"]
+      }
+    }
+  },
+  "loading": {
+    "outputs": {
+      "processed_csv": "data/output/trips_processed.csv",
+      "processed_parquet": "data/output/trips_processed.parquet",
+      "summary_json": "data/output/trip_summary.json",
+      "hourly_stats": "data/output/hourly_stats.csv",
+      "location_stats": "data/output/location_stats.csv"
+    },
+    "database": {
+      "enabled": true,
+      "path": "data/output/pyflow.db",
+      "table_name": "taxi_trips",
+      "if_exists": "replace"
+    }
+  },
+  "validation": {
+    "required_columns": [
+      "tpep_pickup_datetime",
+      "tpep_dropoff_datetime",
+      "fare_amount",
+      "trip_distance"
+    ],
+    "non_null_columns": [
+      "tpep_pickup_datetime",
+      "fare_amount"
+    ],
+    "value_ranges": {
+      "fare_amount": [0, 500],
+      "trip_distance": [0, 100],
+      "passenger_count": [1, 6]
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/pyflow.log",
+    "max_bytes": 10485760,
+    "backup_count": 5
+  }
+}
